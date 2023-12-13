@@ -8,6 +8,7 @@ import (
 
 type H map[string]interface{}
 
+// Context 上下文结构体
 type Context struct {
 	// 起始对象
 	Writer http.ResponseWriter
@@ -20,6 +21,18 @@ type Context struct {
 
 	// 响应信息
 	StatusCode int
+
+	// 中间件
+	handlers []HandlerFunc
+	index    int
+}
+
+func (c *Context) Next() {
+	c.index++
+	s := len(c.handlers)
+	for ; c.index < s; c.index++ {
+		c.handlers[c.index](c)
+	}
 }
 
 /*
