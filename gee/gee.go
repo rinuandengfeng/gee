@@ -1,8 +1,10 @@
 package gee
 
 import (
+	"html/template"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 )
 
@@ -17,8 +19,10 @@ type HandlerFunc func(c *Context)
 // Engine 创建引擎 Engine 实现 ServeHTTP接口
 type Engine struct {
 	*RouterGroup
-	router *router
-	groups []*RouterGroup // 存储所有路由组
+	router        *router
+	groups        []*RouterGroup     // 存储所有路由组
+	htmlTemplates *template.Template // html渲染  将所有模版加载进内存
+	funcMap       template.FuncMap   // html渲染  自定义模版函数
 }
 
 // RouterGroup 路由组
@@ -112,5 +116,41 @@ func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	c := newContext(w, req)
 	c.handlers = middlewares
+	c.engine = engine
 	engine.router.Handle(c)
+
+}
+
+// createStaticHandler 创建静态处理器
+func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
+	absolutePath := path.Join(group.prefix, relativePath)
+	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+	return func(c *Context) {
+		file := c.Param("filepath")
+		// 检查文件是否存在，或者 是否有权限
+		if _, err := fs.Open(file); err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		fileServer.ServeHTTP(c.Writer, c.Req)
+	}
+}
+
+// Static 静态文件服务
+func (group *RouterGroup) Static(relativePath string, root string) {
+	handler := group.createStaticHandler(relativePath, http.Dir(root))
+	urlPattern := path.Join(relativePath, "/*filepath")
+	// 注册GET处理器
+	group.GET(urlPattern, handler)
+}
+
+// SetFuncMap 设置模版函数
+func (engine *Engine) SetFuncMap(funcMap template.FuncMap) {
+	engine.funcMap = funcMap
+}
+
+// LoadHTMLGlob 加载模版方法
+func (engine *Engine) LoadHTMLGlob(pattern string) {
+	engine.htmlTemplates = template.Must(template.New("").Funcs(engine.funcMap).ParseGlob(pattern))
 }

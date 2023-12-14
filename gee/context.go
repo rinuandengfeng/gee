@@ -25,6 +25,9 @@ type Context struct {
 	// 中间件
 	handlers []HandlerFunc
 	index    int
+
+	// 引擎指针
+	engine *Engine
 }
 
 func (c *Context) Next() {
@@ -72,6 +75,7 @@ func (c *Context) Query(key string) string {
 	return c.Req.URL.Query().Get(key)
 }
 
+// Status 设置响应的状态码
 func (c *Context) Status(code int) {
 	c.StatusCode = code
 	c.Writer.WriteHeader(code) // 设置响应状态码
@@ -86,7 +90,9 @@ func (c *Context) SetHeader(key string, value string) {
 }
 
 /*
- */
+String
+以字符串的形式，返回数据
+*/
 func (c *Context) String(code int, format string, values ...interface{}) {
 	c.SetHeader("Content-Type", "text/plain")
 	c.Status(code)
@@ -95,7 +101,7 @@ func (c *Context) String(code int, format string, values ...interface{}) {
 
 /*
 JSON
-封装json响应数据的
+以JSON形式返回数据
 */
 func (c *Context) JSON(code int, obj interface{}) {
 	c.SetHeader("Content-Type", "application/json")
@@ -107,20 +113,26 @@ func (c *Context) JSON(code int, obj interface{}) {
 }
 
 /*
-
- */
-
+Data
+返回数据
+*/
 func (c *Context) Data(code int, data []byte) {
 	c.Status(code)
 	c.Writer.Write(data)
 }
 
-func (c *Context) HTML(code int, html string) {
+/*
+HTML
+以HTML格式将数据返回
+*/
+func (c *Context) HTML(code int, name string, data interface{}) {
 	c.SetHeader("Content-Type", "text/html")
 	c.Status(code)
-	c.Writer.Write([]byte(html))
+	if err := c.engine.htmlTemplates.ExecuteTemplate(c.Writer, name, data); err != nil {
+		c.Fail(500, err.Error())
+	}
 }
 
-func (c *Context) Fail(code int, mesg string) {
-	c.String(code, mesg)
+func (c *Context) Fail(code int, msg string) {
+	c.String(code, msg)
 }
