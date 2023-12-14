@@ -3,6 +3,7 @@ package gee
 import (
 	"log"
 	"net/http"
+	"strings"
 )
 
 /*
@@ -84,6 +85,11 @@ func (group *RouterGroup) POST(pattern string, handler HandlerFunc) {
 	group.addRouter("POST", pattern, handler)
 }
 
+// Use 是定义将中间件添加到路由组中
+func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
+	group.middlewares = append(group.middlewares, middlewares...)
+}
+
 // Run 定义run方法开启http服务
 func (engine *Engine) Run(addr string) (err error) {
 	return http.ListenAndServe(addr, engine)
@@ -97,6 +103,14 @@ ServeHTTP 方法的作用
 如果没有查找到，就返回 404 NOT FOUND。
 */
 func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	var middlewares []HandlerFunc
+	for _, group := range engine.groups {
+		// 如果收到的请求路由前缀在组前缀中，就将其中间件添加到中间件中
+		if strings.HasPrefix(req.URL.Path, group.prefix) {
+			middlewares = append(middlewares, group.middlewares...)
+		}
+	}
 	c := newContext(w, req)
+	c.handlers = middlewares
 	engine.router.Handle(c)
 }
